@@ -14,7 +14,7 @@
 <script>
     window.onload = () => {
         window.ui = SwaggerUIBundle({
-            url: "api-documentation.yaml",
+            url: `api-documentation.yaml?v=${Date.now()}`,
             dom_id: "#swagger-ui",
             presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
             layout: "BaseLayout"
