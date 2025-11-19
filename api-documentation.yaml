@@ -1,7 +1,8 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 0.9.0
+  version: 0.9.1
+  description: "Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)"
 servers:
   - url: https://api.demo-slap.net
 
