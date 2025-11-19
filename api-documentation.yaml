@@ -517,8 +517,10 @@ components:
       example:
         "1234":
           status: done
+          estimatedFinishAt: "2025-11-20T12:00:00Z"
         "5678":
           status: working
+          estimatedFinishAt: "2025-11-20T12:00:00Z"
 
     RenderDataResponse:
       type: object
