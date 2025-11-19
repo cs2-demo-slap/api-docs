@@ -382,16 +382,14 @@ components:
           description: SteamID of the victim
           example: "76561198022222222"
         ttd:
-          type: number
-          format: float
-          description: Time to first damage in seconds
-          example: 0.5
+          type: integer
+          description: Time to first damage in milliseconds
+          example: 50
           nullable: true
         ttk:
-          type: number
-          format: float
-          description: Time to kill in seconds
-          example: 0.3
+          type: integer
+          description: Time to kill in milliseconds
+          example: 450
           nullable: true
     Highlight:
       type: object
@@ -439,8 +437,8 @@ components:
             kills:
               - weapon: "AK-47"
                 victim: "76561198022222222"
-                ttd: 0.5
-                ttk: 0.3
+                ttd: 300
+                ttk: 600
               - weapon: "Deagle"
                 victim: "76561198033333333"
           - id: "2"
