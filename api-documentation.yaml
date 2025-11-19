@@ -1,8 +1,31 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 0.4.0
+  version: 0.6.1
 paths:
+  /public-api/credits-calc:
+    post:
+      tags:
+        - Calculate
+      summary: Calculate credit costs for a render
+      description: Calculate how many credits a render job would cost.
+      security:
+        - ApiKeyAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditsCalcRequest'
+      responses:
+        '200':
+          description: Credit cost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditsCalcResponse'
+        '401':
+          description: API key missing or invalid
   /public-api/analyze/url:
     post:
       tags:
@@ -45,7 +68,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Analyze job identifier
+          description: Analyze job identifier from `/analyze/url`
       responses:
         '200':
           description: Analyze job status
@@ -75,7 +98,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Analyze job identifier
+          description: Analyze job identifier from `/analyze/url`
       responses:
         '200':
           description: Analyze results
@@ -112,7 +135,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Upload identifier associated with the analyze job
+          description: Analyze job identifier from `/analyze/url`
       requestBody:
         required: true
         content:
@@ -154,7 +177,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Job identifier
+          description: Analyze job identifier from `/analyze/url`
       responses:
         '200':
           description: Render job status
@@ -185,6 +208,7 @@ paths:
           required: true
           schema:
             type: string
+          description: Analyze job identifier from `/analyze/url`
       responses:
         '200':
           description: Rendered clips
@@ -221,7 +245,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Upload identifier associated with the analyze job
+          description: Analyze job identifier from `/analyze/url`
       requestBody:
         required: true
         content:
@@ -263,14 +287,14 @@ paths:
           required: true
           schema:
             type: string
-          description: Job identifier
+          description: Fragmovie render job identifier from `/render-fragmovie`
       responses:
         '200':
           description: Fragmovie render job status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RenderJobStatusResponse'
+                $ref: '#/components/schemas/AnalyzeJobStatusResponse'
         '401':
           description: API key missing or invalid
         '404':
@@ -294,6 +318,7 @@ paths:
           required: true
           schema:
             type: string
+          description: Fragmovie render job identifier from `/render-fragmovie`
       responses:
         '200':
           description: Rendered fragmovie
@@ -388,42 +413,19 @@ components:
             tags: [ "4k", "clutch" ]
 
     RenderUploadRequest:
-      type: object
-      required:
-        - highlightIds
-      properties:
-        highlightIds:
-          type: array
-          description: IDs from AnalyzeDataResponse.highlights[].id
-          items:
-            type: string
-          example: [ "1", "2", "5" ]
-        hideUi:
-          type: boolean
-          description: Hide all UI elements
-          default: false
-        showXRay:
-          type: boolean
-          description: Show player outlines through walls
-          default: false
-        showTracers:
-          type: boolean
-          description: Show bullet tracers
-          default: false
-        hideKillfeed:
-          type: boolean
-          description: Hide the killfeed
-          default: false
-        hideWatermark:
-          type: boolean
-          description: Hide the demo-slap watermark
-          default: false
-        tickPresetInSeconds:
-          type: integer
-          description: "Seconds before and after the kill to record"
-          default: 7
-          minimum: 5
-          maximum: 15
+      allOf:
+        - $ref: '#/components/schemas/RenderOptions'
+        - type: object
+          required:
+            - highlightIds
+          properties:
+            highlightIds:
+              type: array
+              description: IDs from AnalyzeDataResponse.highlights[].id
+              items:
+                type: string
+              example: [ "1", "2", "5" ]
+
 
     RenderFragMovieRequest:
       type: object
@@ -447,7 +449,7 @@ components:
       properties:
         jobIds:
           type: array
-          description: JobIds of each video
+          description: JobIds of each video, use the `jobId` from `/render/{jobId}` (which is the analyze job ID) to query status in /render/{jobId}/status
           items:
             type: string
           example: [ "123", "1234", "12345" ]
@@ -461,6 +463,11 @@ components:
             type: string
             enum: [ working, done, error ]
             description: Current status of the video render job
+          estimatedFinishAt:
+            type: string
+            format: date-time
+            description: Estimated finish time for the video render job
+            example: "2025-11-20T12:00:00Z"
         required:
           - status
       example:
@@ -499,3 +506,49 @@ components:
         message:
           type: string
           example: Not enough credits
+    CreditsCalcRequest:
+      allOf:
+        - $ref: '#/components/schemas/RenderOptions'
+        - type: object
+          required:
+            - sceneAmount
+          properties:
+            sceneAmount:
+              type: integer
+              description: "Number of scenes to render"
+              example: 5
+    CreditsCalcResponse:
+      type: object
+      properties:
+        credits:
+          type: integer
+          example: 10
+    RenderOptions:
+      type: object
+      properties:
+        hideUi:
+          type: boolean
+          description: Hide all UI elements
+          default: false
+        showXRay:
+          type: boolean
+          description: Show player outlines through walls
+          default: false
+        showTracers:
+          type: boolean
+          description: Show bullet tracers
+          default: false
+        hideKillfeed:
+          type: boolean
+          description: Hide the killfeed
+          default: false
+        hideWatermark:
+          type: boolean
+          description: Hide the demo-slap watermark
+          default: false
+        tickPresetInSeconds:
+          type: integer
+          description: Seconds to record before the kill happens
+          default: 7
+          minimum: 5
+          maximum: 15
