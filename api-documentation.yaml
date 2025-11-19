@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 0.6.1
+  version: 0.8.0
 servers:
   - url: https://api.demo-slap.net
 
@@ -369,6 +369,29 @@ components:
           type: string
           description: Identifier for the analyze job
           example: "12345"
+    Kill:
+      type: object
+      properties:
+        weapon:
+          type: string
+          description: Weapon used for the kill
+          example: "AK-47"
+        victim:
+          type: string
+          description: SteamID of the victim
+          example: "76561198022222222"
+        ttd:
+          type: number
+          format: float
+          description: Time to first damage in seconds
+          example: 0.5
+          nullable: true
+        ttk:
+          type: number
+          format: float
+          description: Time to kill in seconds
+          example: 0.3
+          nullable: true
     Highlight:
       type: object
       properties:
@@ -394,7 +417,10 @@ components:
             type: string
           description: Tags associated with the highlight
           example: [ "3k", "clutch" ]
-
+        kills:
+          type: array
+          items:
+            $ref: '#/components/schemas/Kill'
     AnalyzeDataResponse:
       type: object
       properties:
@@ -409,11 +435,27 @@ components:
             killCount: 2
             roundNumber: 3
             tags: [ "2k" ]
+            kills:
+              - weapon: "AK-47"
+                victim: "76561198022222222"
+                ttd: 0.5
+                ttk: 0.3
+              - weapon: "Deagle"
+                victim: "76561198033333333"
           - id: "2"
             steamId: "76561198011111111"
             killCount: 4
             roundNumber: 11
             tags: [ "4k", "clutch" ]
+            kills:
+              - weapon: "AWP"
+                victim: "76561198044444444"
+              - weapon: "AWP"
+                victim: "76561198055555555"
+              - weapon: "AWP"
+                victim: "76561198066666666"
+              - weapon: "AWP"
+                victim: "76561198077777777"
 
     RenderUploadRequest:
       allOf:
