@@ -1,0 +1,501 @@
+openapi: 3.0.0
+info:
+  title: demo-slap Public API
+  version: 0.4.0
+paths:
+  /public-api/analyze/url:
+    post:
+      tags:
+        - Analyze
+      summary: Queue analysis for a demo
+      description: Starts analysis for a demo provided by URL.
+      security:
+        - ApiKeyAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Analysis job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeJobResponse'
+        '401':
+          description: API key missing or invalid
+  /public-api/analyze/{jobId}/status:
+    get:
+      tags:
+        - Analyze
+      summary: Get analyze job status
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Analyze job identifier
+      responses:
+        '200':
+          description: Analyze job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeJobStatusResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Analyze job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /public-api/analyze/{jobId}/data:
+    get:
+      tags:
+        - Analyze
+      summary: Get analyze results (highlights metadata)
+      description: Returns structured highlight metadata when status is `done`.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Analyze job identifier
+      responses:
+        '200':
+          description: Analyze results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeDataResponse'
+        '409':
+          description: Analysis not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Analyze job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render/{jobId}:
+    post:
+      tags:
+        - Render
+      summary: Queue a render job from analyzed highlights
+      description: Provide highlight IDs from analyze results to render clips.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Upload identifier associated with the analyze job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderUploadRequest'
+      responses:
+        '200':
+          description: Render job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderJobResponse'
+        '400':
+          description: Validation error (invalid highlight IDs or missing jobId)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Analyze data not found for given jobId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render/{jobId}/status:
+    get:
+      tags:
+        - Render
+      summary: Get render job status
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Job identifier
+      responses:
+        '200':
+          description: Render job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderJobStatusResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Render job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render/{jobId}/data:
+    get:
+      tags:
+        - Render
+      summary: Get rendered clip URLs
+      description: Returns clip URLs after the render job is done.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rendered clips
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderDataResponse'
+        '409':
+          description: Render not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Render job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render-fragmovie/{jobId}:
+    post:
+      tags:
+        - Fragmovie
+      summary: Queue a fragmovie render job from analyzed highlights
+      description: Provide highlight IDs from analyze results to render a fragmovie.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Upload identifier associated with the analyze job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderFragMovieRequest'
+      responses:
+        '200':
+          description: Fragmovie render job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeJobResponse'
+        '400':
+          description: Validation error (invalid highlight IDs or missing jobId)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Analyze data not found for given jobId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render-fragmovie/{jobId}/status:
+    get:
+      tags:
+        - Fragmovie
+      summary: Get fragmovie render job status
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: Job identifier
+      responses:
+        '200':
+          description: Fragmovie render job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderJobStatusResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Render job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /public-api/render-fragmovie/{jobId}/data:
+    get:
+      tags:
+        - Fragmovie
+      summary: Get rendered fragmovie URL
+      description: Returns fragmovie URL after the render job is done.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rendered fragmovie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderDataResponse'
+        '409':
+          description: Render not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Render job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    AnalyzeJobStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ working, done, error ]
+        errorMessage:
+          type: string
+          nullable: true
+      example:
+        status: working
+    AnalyzeJobResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          description: Identifier for the analyze job
+          example: "12345"
+    Highlight:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Highlight identifier
+          example: "1"
+        steamId:
+          type: string
+          description: Player SteamID
+          example: "76561198000000000"
+        killCount:
+          type: integer
+          description: Number of kills in the clip
+          example: 3
+        roundNumber:
+          type: integer
+          description: Round number within the match
+          example: 14
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags associated with the highlight
+          example: [ "3k", "clutch" ]
+
+    AnalyzeDataResponse:
+      type: object
+      properties:
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Highlight'
+      example:
+        highlights:
+          - id: "1"
+            steamId: "76561198000000000"
+            killCount: 2
+            roundNumber: 3
+            tags: [ "2k" ]
+          - id: "2"
+            steamId: "76561198011111111"
+            killCount: 4
+            roundNumber: 11
+            tags: [ "4k", "clutch" ]
+
+    RenderUploadRequest:
+      type: object
+      required:
+        - highlightIds
+      properties:
+        highlightIds:
+          type: array
+          description: IDs from AnalyzeDataResponse.highlights[].id
+          items:
+            type: string
+          example: [ "1", "2", "5" ]
+        hideUi:
+          type: boolean
+          description: Hide all UI elements
+          default: false
+        showXRay:
+          type: boolean
+          description: Show player outlines through walls
+          default: false
+        showTracers:
+          type: boolean
+          description: Show bullet tracers
+          default: false
+        hideKillfeed:
+          type: boolean
+          description: Hide the killfeed
+          default: false
+        hideWatermark:
+          type: boolean
+          description: Hide the demo-slap watermark
+          default: false
+        tickPresetInSeconds:
+          type: integer
+          description: "Seconds before and after the kill to record"
+          default: 7
+          minimum: 5
+          maximum: 15
+
+    RenderFragMovieRequest:
+      type: object
+      required:
+        - highlightIds
+        - introTitle
+      properties:
+        highlightIds:
+          type: array
+          description: IDs from AnalyzeDataResponse.highlights[].id
+          items:
+            type: string
+          example: [ "1", "2", "5" ]
+        introTitle:
+          type: string
+          description: Displayed Intro Title
+          example: Katowice '25
+
+    RenderJobResponse:
+      type: object
+      properties:
+        jobIds:
+          type: array
+          description: JobIds of each video
+          items:
+            type: string
+          example: [ "123", "1234", "12345" ]
+
+    RenderJobStatusResponse:
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          status:
+            type: string
+            enum: [ working, done, error ]
+            description: Current status of the video render job
+        required:
+          - status
+      example:
+        "1234":
+          status: done
+        "5678":
+          status: working
+
+    RenderDataResponse:
+      type: object
+      properties:
+        highlightClips:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              clipUrl:
+                type: string
+                format: uri
+                example: https://cdn.example.com/renders/uuid/clip-1.mp4
+              clipLengthSeconds:
+                type: number
+                format: float
+                example: 15.32
+      example:
+        highlightClips:
+          "1":
+            clipUrl: https://cdn.example.com/renders/123/clip-1.mp4
+            clipLengthSeconds: 15.32
+          "2":
+            clipUrl: https://cdn.example.com/renders/123/clip-2.mp4
+            clipLengthSeconds: 20.10
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Not enough credits
