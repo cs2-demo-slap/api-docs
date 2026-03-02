@@ -1,12 +1,42 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 0.9.1
+  version: 1.0.0
   description: "Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)"
 servers:
   - url: https://api.demo-slap.net
 
 paths:
+  /public-api/matches:
+    get:
+      tags:
+        - Match
+      summary: Get user matches
+      description: Retrieve a paginated list of matches for the authenticated user.
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination.
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 10
+          description: Number of matches per page.
+      responses:
+        '200':
+          description: A paginated list of user matches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMatchResponse'
+        '401':
+          description: API key missing or invalid
   /public-api/credits-calc:
     post:
       tags:
@@ -352,6 +382,60 @@ components:
       in: header
       name: x-api-key
   schemas:
+    PaginatedMatchResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchResponse'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            pageCount:
+              type: integer
+            rowCount:
+              type: integer
+    MatchResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          enum: [url, api, rungame-url, upload, match-token, faceit]
+        status:
+          type: string
+          enum: [Uploading, Added, ReadyForAnalyzing, Analyzing, Analyzed, Error]
+        matchTime:
+          type: string
+          format: date-time
+        map:
+          type: string
+        teamA:
+          $ref: '#/components/schemas/Team'
+        teamB:
+          $ref: '#/components/schemas/Team'
+        hasVideos:
+          type: boolean
+    Team:
+      type: object
+      properties:
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+    Player:
+      type: object
+      properties:
+        steamId:
+          type: string
+        name:
+          type: string
     AnalyzeJobStatusResponse:
       type: object
       properties:
