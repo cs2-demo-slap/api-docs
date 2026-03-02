@@ -403,7 +403,7 @@ components:
     MatchResponse:
       type: object
       properties:
-        id:
+        jobId:
           type: string
         source:
           type: string
