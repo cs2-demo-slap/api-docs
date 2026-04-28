@@ -425,6 +425,10 @@ components:
     Team:
       type: object
       properties:
+        score:
+          type: integer
+          description: Final score of this team in the match.
+          example: 13
         players:
           type: array
           items:
@@ -436,6 +440,10 @@ components:
           type: string
         name:
           type: string
+        isMe:
+          type: boolean
+          description: True when this player is the authenticated user (matched by steamId).
+          example: false
     AnalyzeJobStatusResponse:
       type: object
       properties:
@@ -465,6 +473,10 @@ components:
           type: string
           description: SteamID of the victim
           example: "76561198022222222"
+        victimIsMe:
+          type: boolean
+          description: True when the victim is the authenticated user.
+          example: false
         ttd:
           type: integer
           description: Time to first damage in milliseconds
@@ -484,8 +496,12 @@ components:
           example: "1"
         steamId:
           type: string
-          description: Player SteamID
+          description: SteamID of the player who got the kills (the highlight's killer).
           example: "76561198000000000"
+        isMe:
+          type: boolean
+          description: True when the killer (steamId above) is the authenticated user. Use this to filter the user's own plays before rendering.
+          example: true
         killCount:
           type: integer
           description: Number of kills in the clip
@@ -515,30 +531,38 @@ components:
         highlights:
           - id: "1"
             steamId: "76561198000000000"
+            isMe: true
             killCount: 2
             roundNumber: 3
             tags: [ "2k" ]
             kills:
               - weapon: "AK-47"
                 victim: "76561198022222222"
+                victimIsMe: false
                 ttd: 300
                 ttk: 600
               - weapon: "Deagle"
                 victim: "76561198033333333"
+                victimIsMe: false
           - id: "2"
             steamId: "76561198011111111"
+            isMe: false
             killCount: 4
             roundNumber: 11
             tags: [ "4k", "clutch" ]
             kills:
               - weapon: "AWP"
                 victim: "76561198044444444"
+                victimIsMe: false
               - weapon: "AWP"
                 victim: "76561198055555555"
+                victimIsMe: false
               - weapon: "AWP"
                 victim: "76561198066666666"
+                victimIsMe: false
               - weapon: "AWP"
                 victim: "76561198077777777"
+                victimIsMe: false
 
     RenderUploadRequest:
       allOf:
