@@ -269,8 +269,22 @@ paths:
     post:
       tags:
         - Fragmovie
-      summary: Queue a fragmovie render job from analyzed highlights
-      description: Provide highlight IDs from analyze results to render a fragmovie.
+      summary: Stitch already-rendered clips into a fragmovie
+      description: |
+        Stitches a set of already-rendered video clips into a single
+        fragmovie MP4.
+
+        **Prerequisite pipeline:**
+          1. `POST /public-api/analyze/url` → analyze jobId
+          2. `POST /public-api/render/{jobId}` → array of video jobIds
+          3. Wait until every video jobId is `done` via
+             `/public-api/render/{jobId}/status`
+          4. Pass those video jobIds as `highlightIds` to **this**
+             endpoint. The path `{jobId}` is the analyze jobId from step 1.
+
+        See `RenderFragMovieRequest.highlightIds` for the full warning
+        about which ids belong here — analyze highlight ids and unfinished
+        clips will be rejected with 400 before credits are deducted.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -294,7 +308,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AnalyzeJobResponse'
         '400':
-          description: Validation error (invalid highlight IDs or missing jobId)
+          description: |
+            Validation error. Common causes:
+              * `highlightIds` empty or missing
+              * none of the supplied `highlightIds` resolve to a
+                rendered FragMovie clip belonging to the user (e.g. the
+                caller passed analyze highlight ids instead of video
+                jobIds, or the underlying renders are still in progress).
           content:
             application/json:
               schema:
@@ -587,10 +607,26 @@ components:
       properties:
         highlightIds:
           type: array
-          description: IDs from AnalyzeDataResponse.highlights[].id
+          description: |
+            **Video jobIds** from a previously-completed `/public-api/render/{jobId}`
+            call (the strings in `RenderJobResponse.jobIds`, also the keys
+            returned by `/public-api/render/{jobId}/status`).
+
+            ⚠️ Despite the field name, these are NOT the
+            `AnalyzeDataResponse.highlights[].id` values. The fragmovie
+            stitcher operates on already-rendered clip videos, so each
+            id you pass must:
+              1. belong to the authenticated user, and
+              2. be a clip video whose render status is `done`.
+
+            Supplying analyze highlight ids (or videoIds whose render
+            isn't finished yet) returns `400 No rendered clips found for
+            the supplied highlightIds.` before any credits are charged.
+
+            The field is named `highlightIds` for backwards compatibility.
           items:
             type: string
-          example: [ "1", "2", "5" ]
+          example: [ "65f0a1b2c3d4e5f600000123", "65f0a1b2c3d4e5f600000124" ]
         introTitle:
           type: string
           description: Displayed Intro Title
