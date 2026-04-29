@@ -61,8 +61,8 @@ paths:
     post:
       tags:
         - Calculate
-      summary: Calculate credit costs for a render
-      description: Calculate how many credits a render job would cost.
+      summary: Calculate credit costs for clip rendering
+      description: Calculate how many credits a render_clips job would cost.
       security:
         - ApiKeyAuth: [ ]
       requestBody:
@@ -71,6 +71,29 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreditsCalcRequest'
+      responses:
+        '200':
+          description: Credit cost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditsCalcResponse'
+        '401':
+          description: API key missing or invalid
+  /public-api/fragmovie-credits-calc:
+    post:
+      tags:
+        - Calculate
+      summary: Calculate credit costs for fragmovie rendering
+      description: Calculate how many credits a render_fragmovie job would cost for already-rendered clips.
+      security:
+        - ApiKeyAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FragMovieCreditsCalcRequest'
       responses:
         '200':
           description: Credit cost
@@ -816,6 +839,19 @@ components:
               type: integer
               description: "Number of scenes to render"
               example: 5
+    FragMovieCreditsCalcRequest:
+      type: object
+      required:
+        - videoJobIds
+      properties:
+        videoJobIds:
+          type: array
+          description: Video jobIds returned by render_clips; same input as render_fragmovie.
+          items:
+            type: string
+          example:
+            - 65f0a1b2c3d4e5f600000123
+            - 65f0a1b2c3d4e5f600000124
     CreditsCalcResponse:
       type: object
       properties:
