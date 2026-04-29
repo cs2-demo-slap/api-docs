@@ -720,6 +720,10 @@ components:
         - videoJobIds
         - introTitle
       properties:
+        name:
+          type: string
+          description: Optional saved montage/export name. Defaults to `Fragmovie over API`.
+          example: Clutch Protocol
         videoJobIds:
           type: array
           description: |
