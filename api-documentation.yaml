@@ -12,7 +12,7 @@ info:
     | Id type             | Issued by                                | Consumed as                                                              | Example                  |
     |---------------------|------------------------------------------|--------------------------------------------------------------------------|--------------------------|
     | **analyze jobId**   | `POST /public-api/analyze/url`           | path `{jobId}` for `/analyze/*`, `/render/*`, `/render-fragmovie` (POST) | `691798e0ae42cabe76b076d9` |
-    | **highlight id**    | `GET /public-api/analyze/{jobId}/data` (`highlights[].id`) | `RenderUploadRequest.highlightIds` on `POST /render/{jobId}`            | `"1"`, `"2"`, `"5"`        |
+    | **highlight id**    | `GET /public-api/analyze/{jobId}/data` (`highlights[].id`) | `RenderClipsRequest.highlightIds` on `POST /render/{jobId}`             | `69f23f11074495fe67b6f932` |
     | **video jobId**     | `POST /public-api/render/{jobId}` (`RenderJobResponse.jobIds[]`) | keys of `/render/{jobId}/status` and `/render/{jobId}/data`; `RenderFragMovieRequest.videoJobIds` on `POST /render-fragmovie/{jobId}` | `65f0a1b2c3d4e5f600000123` |
     | **fragmovie-export id** | `POST /public-api/render-fragmovie/{jobId}` (`FragMovieJobResponse.jobId`) | path `{jobId}` for `/render-fragmovie/{jobId}/status` and `/render-fragmovie/{jobId}/data` | `65f0a1b2c3d4e5f600000900` |
 
@@ -85,7 +85,11 @@ paths:
       tags:
         - Calculate
       summary: Calculate credit costs for fragmovie rendering
-      description: Calculate how many credits a render_fragmovie job would cost for already-rendered clips.
+      description: |
+        Calculate how many credits a render_fragmovie job would cost for
+        already-rendered clips. The `videoJobIds` must be ids returned by
+        `POST /public-api/render/{jobId}` whose render status is already
+        `done`; highlight ids from analyze data are not valid here.
       security:
         - ApiKeyAuth: [ ]
       requestBody:
@@ -103,6 +107,12 @@ paths:
                 $ref: '#/components/schemas/CreditsCalcResponse'
         '401':
           description: API key missing or invalid
+        '400':
+          description: No rendered clips found for the supplied videoJobIds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /public-api/analyze/url:
     post:
       tags:
@@ -171,7 +181,7 @@ paths:
       description: |
         Returns structured highlight metadata when status is `done`.
         Each `highlights[].id` is a **highlight (scene) id** — pass
-        these in `RenderUploadRequest.highlightIds` to
+        these in `RenderClipsRequest.highlightIds` to
         `POST /render/{jobId}` to render clips.
       security:
         - ApiKeyAuth: [ ]
@@ -237,7 +247,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RenderUploadRequest'
+              $ref: '#/components/schemas/RenderClipsRequest'
       responses:
         '200':
           description: |
@@ -268,10 +278,11 @@ paths:
         - Render
       summary: Get render job status
       description: |
-        Returns a map of **video jobId** → status for every clip queued
-        by `POST /render/{jobId}`. Path `{jobId}` is the **analyze
+        Returns a map of **video jobId** → status for fragmovie clip
+        videos on this analyze job. Path `{jobId}` is the **analyze
         jobId**, not a video jobId — the video jobIds appear as the
-        keys of the response object.
+        keys of the response object. Compare the keys with the `jobIds`
+        returned by your `POST /render/{jobId}` call.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -305,10 +316,11 @@ paths:
         - Render
       summary: Get rendered clip URLs
       description: |
-        Returns clip URLs and per-clip duration once every video render
-        in the batch is `done`. Path `{jobId}` is the **analyze
-        jobId** — the keys inside `highlightClips` are the **video
-        jobIds** from the original `POST /render/{jobId}` response.
+        Returns clip URLs and per-clip duration for rendered fragmovie
+        clip videos on this analyze job. Path `{jobId}` is the
+        **analyze jobId** — the keys inside `highlightClips` are
+        **video jobIds**. Call this after `GET /render/{jobId}/status`
+        reports `done` for the specific video jobIds you plan to use.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -691,7 +703,7 @@ components:
                 victim: "76561198077777777"
                 victimIsMe: false
 
-    RenderUploadRequest:
+    RenderClipsRequest:
       allOf:
         - $ref: '#/components/schemas/RenderOptions'
         - type: object
@@ -711,7 +723,7 @@ components:
                 endpoint and returned in `RenderJobResponse.jobIds`).
               items:
                 type: string
-              example: [ "1", "2", "5" ]
+              example: [ "69f23f11074495fe67b6f932", "69f23f11074495fe67b6f922" ]
 
 
     RenderFragMovieRequest:
@@ -771,10 +783,9 @@ components:
     RenderJobStatusResponse:
       type: object
       description: |
-        Map of **video jobId** → render status (one entry per clip
-        queued by `POST /render/{jobId}`). The keys are video jobIds
-        from `RenderJobResponse.jobIds`, NOT analyze jobIds or
-        highlight ids.
+        Map of **video jobId** → render status for fragmovie clip videos
+        on an analyze job. The keys are video jobIds from
+        `RenderJobResponse.jobIds`, NOT analyze jobIds or highlight ids.
       additionalProperties:
         type: object
         properties:
@@ -850,7 +861,10 @@ components:
       properties:
         videoJobIds:
           type: array
-          description: Video jobIds returned by render_clips; same input as render_fragmovie.
+          description: |
+            **Video jobIds** from a previously-completed `/public-api/render/{jobId}`
+            call. Same input as `RenderFragMovieRequest.videoJobIds`; NOT
+            analyze highlight ids.
           items:
             type: string
           example:
