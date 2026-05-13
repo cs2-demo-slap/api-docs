@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 2.2.0
+  version: 2.3.0
   description: |
     Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)
 
@@ -21,6 +21,10 @@ info:
       * `/render-fragmovie/{jobId}/status`, `/render-fragmovie/{jobId}/data` → **fragmovie-export id**
 
     The `POST /render-custom/{jobId}` endpoint selects clips by `(tick, duration, povSteamId)` instead of analyzer-detected highlight ids. Its POV `steamId` is the participant SteamID64 from `GET /public-api/matches` (`teamA.players[].steamId`, `teamB.players[].steamId`). Output (status + signed URLs) is retrieved from the SAME `/render/{jobId}/status` and `/render/{jobId}/data` endpoints as `POST /render/{jobId}` — both selectors share one status/data surface.
+
+    ## 2.3.0 pricing change
+
+    Custom-render pricing no longer applies the public API reduced-pricing discount. `POST /public-api/custom-credits-calc` and `POST /public-api/render-custom/{jobId}` now both charge the full per-second custom-render formula: ~0.1 credits/s base, × 1.5 for `highResolution`, × 1.5 for `hideWatermark`, with a 1-credit floor.
 
     ## 2.2.0 additive change
 
@@ -116,9 +120,8 @@ paths:
         without queuing a job.
 
         Pricing is per-second of rendered video (~0.1 credits/s base,
-        then × 1.5 for `highResolution`, × 1.5 for `hideWatermark`, ÷ 2
-        for reduced-pricing baked into the public API, with a 1-credit
-        floor). Only `duration` affects cost — `tick` and `povSteamId`
+        then × 1.5 for `highResolution`, × 1.5 for `hideWatermark`, with
+        a 1-credit floor). Only `duration` affects cost — `tick` and `povSteamId`
         are accepted for payload symmetry but ignored.
       security:
         - ApiKeyAuth: [ ]
