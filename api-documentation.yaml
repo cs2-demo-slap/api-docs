@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 2.1.0
+  version: 2.2.0
   description: |
     Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)
 
@@ -21,6 +21,19 @@ info:
       * `/render-fragmovie/{jobId}/status`, `/render-fragmovie/{jobId}/data` → **fragmovie-export id**
 
     The `POST /render-custom/{jobId}` endpoint selects clips by `(tick, duration, povSteamId)` instead of analyzer-detected highlight ids. Its POV `steamId` is the participant SteamID64 from `GET /public-api/matches` (`teamA.players[].steamId`, `teamB.players[].steamId`). Output (status + signed URLs) is retrieved from the SAME `/render/{jobId}/status` and `/render/{jobId}/data` endpoints as `POST /render/{jobId}` — both selectors share one status/data surface.
+
+    ## 2.2.0 additive change
+
+    `GET /public-api/analyze/{jobId}/data` (`AnalyzeDataResponse`) gained the fields needed to drive `POST /public-api/render-custom/{jobId}` directly from the analyze response — no extra `/matches` call required:
+
+    * `tickRate` (top-level): demo tick rate, for converting seconds ↔ ticks.
+    * `participants[]` (top-level): the valid set of `povSteamId` values for custom-render (mirrors `match.startPlayers`).
+    * `highlights[].startTick`, `highlights[].endTick`: clip-window hints (first/last kill tick of the highlight).
+    * `highlights[].kills[].tick`: absolute demo tick of each kill — the value to feed into `CustomClipRequest.tick` (after subtracting your desired lead-in).
+    * `highlights[].kills[].killerSteamId`: convenience alias for the parent highlight's killer SteamID64 (a valid `CustomClipRequest.povSteamId`).
+    * `highlights[].kills[].isHeadshot`, `noScope`, `throughSmoke`, `isWallBang`: per-kill flags exposed from the analyzer for client-side filtering (e.g. "render every wallbang", "headshots only").
+
+    All additions are non-breaking — fields are added to existing schemas, no field renames, no required fields removed. Existing clients keep working unchanged.
 
     ## 2.1.0 additive change
 
@@ -233,6 +246,21 @@ paths:
         Each `highlights[].id` is a **highlight (scene) id** — pass
         these in `RenderClipsRequest.highlightIds` to
         `POST /render/{jobId}` to render clips.
+
+        The response also carries everything needed to drive
+        `POST /render-custom/{jobId}` directly (no extra `/matches`
+        call required):
+
+        * top-level `tickRate` + `participants[]` give you the
+          conversion factor and the valid set of `povSteamId` values.
+        * `highlights[].startTick` / `endTick` and
+          `highlights[].kills[].tick` give the raw demo ticks to feed
+          into `CustomClipRequest.tick`.
+        * `highlights[].kills[].killerSteamId` is a convenient default
+          for `CustomClipRequest.povSteamId`.
+        * Per-kill flags (`isHeadshot`, `noScope`, `throughSmoke`,
+          `isWallBang`) let a custom renderer filter before deciding
+          which clips to queue.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -766,6 +794,34 @@ components:
           description: Time to kill in milliseconds
           example: 450
           nullable: true
+        tick:
+          type: integer
+          description: |
+            Absolute demo tick where this kill occurred. Use this as the
+            `tick` value (after subtracting a lead-in of `n * tickRate`
+            for `n` seconds of pre-roll) when building a
+            `CustomClipRequest` for `POST /render-custom/{jobId}`.
+          example: 154320
+        killerSteamId:
+          type: string
+          description: |
+            SteamID64 of the player who got this kill. Equal to the
+            parent highlight's `steamId`; duplicated per-kill so each
+            kill is self-contained when used as a
+            `CustomClipRequest.povSteamId`.
+          example: "76561198000000000"
+        isHeadshot:
+          type: boolean
+          example: true
+        noScope:
+          type: boolean
+          example: false
+        throughSmoke:
+          type: boolean
+          example: false
+        isWallBang:
+          type: boolean
+          example: false
     Highlight:
       type: object
       properties:
@@ -795,18 +851,68 @@ components:
             type: string
           description: Tags associated with the highlight
           example: [ "3k", "clutch" ]
+        startTick:
+          type: integer
+          description: |
+            Absolute demo tick of the first kill in this highlight.
+            Suitable as a `CustomClipRequest.tick` for
+            `POST /render-custom/{jobId}` when rendering the whole
+            multi-kill scene as one custom clip. Pair with the
+            top-level `tickRate` to convert to seconds.
+          example: 154320
+        endTick:
+          type: integer
+          description: |
+            Absolute demo tick of the last kill in this highlight.
+            Combined with `startTick` gives the inclusive kill-time
+            window; pad it with your own lead-in / tail seconds to form
+            a `CustomClipRequest.duration`.
+          example: 156960
         kills:
           type: array
           items:
             $ref: '#/components/schemas/Kill'
+    AnalyzeParticipant:
+      type: object
+      properties:
+        steamId:
+          type: string
+          example: "76561198000000000"
+        name:
+          type: string
+          example: "s1mple"
     AnalyzeDataResponse:
       type: object
       properties:
+        tickRate:
+          type: integer
+          description: |
+            Demo tick rate (ticks per second), e.g. 64 or 128. Use this
+            to convert seconds ↔ ticks when building
+            `CustomClipRequest.tick` / `duration` for
+            `POST /render-custom/{jobId}`.
+          example: 64
+        participants:
+          type: array
+          description: |
+            All match participants — the valid set of `povSteamId`
+            values for `POST /render-custom/{jobId}`. Any `povSteamId`
+            outside this list is rejected before credits are charged.
+          items:
+            $ref: '#/components/schemas/AnalyzeParticipant'
         highlights:
           type: array
           items:
             $ref: '#/components/schemas/Highlight'
       example:
+        tickRate: 64
+        participants:
+          - steamId: "76561198000000000"
+            name: "s1mple"
+          - steamId: "76561198011111111"
+            name: "ZywOo"
+          - steamId: "76561198022222222"
+            name: "device"
         highlights:
           - id: "1"
             steamId: "76561198000000000"
@@ -814,34 +920,47 @@ components:
             killCount: 2
             roundNumber: 3
             tags: [ "2k" ]
+            startTick: 24576
+            endTick: 24960
             kills:
               - weapon: "AK-47"
                 victim: "76561198022222222"
                 victimIsMe: false
                 ttd: 300
                 ttk: 600
+                tick: 24576
+                killerSteamId: "76561198000000000"
+                isHeadshot: true
+                noScope: false
+                throughSmoke: false
+                isWallBang: false
               - weapon: "Deagle"
                 victim: "76561198033333333"
                 victimIsMe: false
+                tick: 24960
+                killerSteamId: "76561198000000000"
+                isHeadshot: true
+                noScope: false
+                throughSmoke: false
+                isWallBang: false
           - id: "2"
             steamId: "76561198011111111"
             isMe: false
             killCount: 4
             roundNumber: 11
             tags: [ "4k", "clutch" ]
+            startTick: 90240
+            endTick: 91200
             kills:
               - weapon: "AWP"
                 victim: "76561198044444444"
                 victimIsMe: false
-              - weapon: "AWP"
-                victim: "76561198055555555"
-                victimIsMe: false
-              - weapon: "AWP"
-                victim: "76561198066666666"
-                victimIsMe: false
-              - weapon: "AWP"
-                victim: "76561198077777777"
-                victimIsMe: false
+                tick: 90240
+                killerSteamId: "76561198011111111"
+                isHeadshot: false
+                noScope: true
+                throughSmoke: false
+                isWallBang: false
 
     RenderClipsRequest:
       allOf:
