@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 2.0.0
+  version: 2.1.0
   description: |
     Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)
 
@@ -13,12 +13,18 @@ info:
     |---------------------|------------------------------------------|--------------------------------------------------------------------------|--------------------------|
     | **analyze jobId**   | `POST /public-api/analyze/url`           | path `{jobId}` for `/analyze/*`, `/render/*`, `/render-fragmovie` (POST) | `691798e0ae42cabe76b076d9` |
     | **highlight id**    | `GET /public-api/analyze/{jobId}/data` (`highlights[].id`) | `RenderClipsRequest.highlightIds` on `POST /render/{jobId}`             | `69f23f11074495fe67b6f932` |
-    | **video jobId**     | `POST /public-api/render/{jobId}` (`RenderJobResponse.jobIds[]`) | keys of `/render/{jobId}/status` and `/render/{jobId}/data`; `RenderFragMovieRequest.videoJobIds` on `POST /render-fragmovie/{jobId}` | `65f0a1b2c3d4e5f600000123` |
+    | **video jobId**     | `POST /public-api/render/{jobId}` or `POST /public-api/render-custom/{jobId}` (`RenderJobResponse.jobIds[]`) | keys of `/render/{jobId}/status` and `/render/{jobId}/data`; `RenderFragMovieRequest.videoJobIds` on `POST /render-fragmovie/{jobId}` | `65f0a1b2c3d4e5f600000123` |
     | **fragmovie-export id** | `POST /public-api/render-fragmovie/{jobId}` (`FragMovieJobResponse.jobId`) | path `{jobId}` for `/render-fragmovie/{jobId}/status` and `/render-fragmovie/{jobId}/data` | `65f0a1b2c3d4e5f600000900` |
 
     Note that the **path** `{jobId}` segment means different things depending on the endpoint:
-      * `/analyze/{jobId}/*`, `/render/{jobId}`, `/render/{jobId}/*`, `/render-fragmovie/{jobId}` (POST) → **analyze jobId**
+      * `/analyze/{jobId}/*`, `/render/{jobId}`, `/render-custom/{jobId}`, `/render/{jobId}/*`, `/render-fragmovie/{jobId}` (POST) → **analyze jobId**
       * `/render-fragmovie/{jobId}/status`, `/render-fragmovie/{jobId}/data` → **fragmovie-export id**
+
+    The `POST /render-custom/{jobId}` endpoint selects clips by `(tick, duration, povSteamId)` instead of analyzer-detected highlight ids. Its POV `steamId` is the participant SteamID64 from `GET /public-api/matches` (`teamA.players[].steamId`, `teamB.players[].steamId`). Output (status + signed URLs) is retrieved from the SAME `/render/{jobId}/status` and `/render/{jobId}/data` endpoints as `POST /render/{jobId}` — both selectors share one status/data surface.
+
+    ## 2.1.0 additive change
+
+    New endpoint `POST /public-api/render-custom/{jobId}` accepts caller-defined clips selected by `(tick, duration, povSteamId)` tuples instead of analyzer-detected highlight ids. Same response shape as `POST /render/{jobId}` (`RenderJobResponse.jobIds[]`) and same `/render/{jobId}/status` and `/render/{jobId}/data` status/data endpoints — the new path only changes the selector. Existing clients are unaffected.
 
     ## 2.0.0 breaking change
 
@@ -61,8 +67,12 @@ paths:
     post:
       tags:
         - Calculate
-      summary: Calculate credit costs for clip rendering
-      description: Calculate how many credits a render_clips job would cost.
+      summary: Calculate credit costs for highlight clip rendering
+      description: |
+        Calculate how many credits a `POST /render/{jobId}` job would
+        cost. Use `POST /custom-credits-calc` for pricing custom
+        (tick/duration/POV) renders, and `POST /fragmovie-credits-calc`
+        for the stitched fragmovie export cost.
       security:
         - ApiKeyAuth: [ ]
       requestBody:
@@ -78,6 +88,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreditsCalcResponse'
+        '401':
+          description: API key missing or invalid
+  /public-api/custom-credits-calc:
+    post:
+      tags:
+        - Calculate
+      summary: Calculate credit costs for custom (tick/duration/POV) clip rendering
+      description: |
+        Calculate how many credits a `POST /render-custom/{jobId}` job
+        would cost. Body shape is identical to `RenderCustomClipsRequest`
+        (minus the path-bound analyze jobId), so callers can copy-paste
+        the same payload they intend to render and see the exact cost
+        without queuing a job.
+
+        Pricing is per-second of rendered video (~0.1 credits/s base,
+        then × 1.5 for `highResolution`, × 1.5 for `hideWatermark`, ÷ 2
+        for reduced-pricing baked into the public API, with a 1-credit
+        floor). Only `duration` affects cost — `tick` and `povSteamId`
+        are accepted for payload symmetry but ignored.
+      security:
+        - ApiKeyAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomCreditsCalcRequest'
+      responses:
+        '200':
+          description: Credit cost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditsCalcResponse'
+        '400':
+          description: customClips missing or empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: API key missing or invalid
   /public-api/fragmovie-credits-calc:
@@ -231,6 +281,12 @@ paths:
         **highlight (scene) ids** from
         `AnalyzeDataResponse.highlights[].id`. The response `jobIds`
         are the new **video jobIds** in their own id space.
+
+        If you already know the exact tick window you want (no
+        analyzer-detected highlight needed), use
+        `POST /public-api/render-custom/{jobId}` instead — same
+        response shape and same `/render/{jobId}/status` and
+        `/render/{jobId}/data` surface for polling and retrieval.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -272,17 +328,99 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /public-api/render-custom/{jobId}:
+    post:
+      tags:
+        - Render
+      summary: Queue a render job from caller-defined (tick/duration/POV) clips
+      description: |
+        Queue one MP4 render per caller-defined clip. Sibling of
+        `POST /render/{jobId}` for when you already know the exact tick
+        window you want and don't need an analyzer-detected highlight
+        (e.g. driving the pipeline from your own kill-feed parser, an
+        external highlight detector, or a player-driven moment).
+
+        Path `{jobId}` is the **analyze jobId** (the match providing
+        tick/round/POV context). The `customClips` body field is an
+        array of `{ tick, duration, povSteamId }` tuples — each entry
+        renders to exactly one MP4 starting at `tick` for `duration`
+        seconds from `povSteamId`'s point of view.
+
+        The response `jobIds` are **video jobIds** in the same id space
+        as `POST /render/{jobId}` — poll them via
+        `/render/{jobId}/status` and retrieve signed URLs via
+        `/render/{jobId}/data`. Both endpoints share the same
+        status/data surface.
+
+        **Validation** (rejected with `400` before any credits are
+        charged):
+          * `tick` must lie inside an actual round
+            (`round.startTick ≤ tick ≤ round.endTick`). Ticks in the
+            freeze-time gap between rounds return `400` with a hint
+            naming the surrounding rounds so the caller can adjust.
+          * `duration` must be greater than `0` and at most `60`
+            seconds. `tick + duration*tickRate` must still fit inside
+            the demo end.
+          * `povSteamId` must be a participant of the match (must
+            appear in the player lists returned by
+            `/public-api/matches`).
+      security:
+        - ApiKeyAuth: [ ]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+          description: |
+            **Analyze jobId** from `POST /analyze/url`
+            (`AnalyzeJobResponse.jobId`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderCustomClipsRequest'
+      responses:
+        '200':
+          description: |
+            Render job accepted. The returned `jobIds` are **video
+            jobIds** — same id space as `POST /render/{jobId}`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderJobResponse'
+        '400':
+          description: |
+            Validation error: missing `customClips`, tick outside a
+            round, duration out of range, POV is not a participant of
+            the match, or insufficient credits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: API key missing or invalid
+        '404':
+          description: Analyze data not found for given jobId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /public-api/render/{jobId}/status:
     get:
       tags:
         - Render
       summary: Get render job status
       description: |
-        Returns a map of **video jobId** → status for fragmovie clip
-        videos on this analyze job. Path `{jobId}` is the **analyze
-        jobId**, not a video jobId — the video jobIds appear as the
-        keys of the response object. Compare the keys with the `jobIds`
-        returned by your `POST /render/{jobId}` call.
+        Returns a map of **video jobId** → status for clip videos on
+        this analyze job (covers clips queued by both
+        `POST /render/{jobId}` and `POST /render-custom/{jobId}`). Path
+        `{jobId}` is the **analyze jobId**, not a video jobId — the
+        video jobIds appear as the keys of the response object.
+        Compare the keys with the
+        `jobIds` returned by your `POST /render/{jobId}` call.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -316,11 +454,13 @@ paths:
         - Render
       summary: Get rendered clip URLs
       description: |
-        Returns clip URLs and per-clip duration for rendered fragmovie
-        clip videos on this analyze job. Path `{jobId}` is the
-        **analyze jobId** — the keys inside `highlightClips` are
-        **video jobIds**. Call this after `GET /render/{jobId}/status`
-        reports `done` for the specific video jobIds you plan to use.
+        Returns clip URLs and per-clip duration for rendered clip
+        videos on this analyze job (covers clips queued by both
+        `POST /render/{jobId}` and `POST /render-custom/{jobId}`).
+        Path `{jobId}` is the **analyze jobId** — the keys inside
+        `highlightClips` are **video jobIds**. Call this after
+        `GET /render/{jobId}/status` reports `done` for the specific
+        video jobIds you plan to use.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -725,6 +865,74 @@ components:
                 type: string
               example: [ "69f23f11074495fe67b6f932", "69f23f11074495fe67b6f922" ]
 
+    CustomClipRequest:
+      type: object
+      required:
+        - tick
+        - duration
+        - povSteamId
+      description: |
+        One caller-defined clip selected by raw demo coordinates rather
+        than by an analyzer-detected highlight. Each `CustomClipRequest`
+        in `RenderCustomClipsRequest.customClips` is rendered to exactly
+        one MP4.
+      properties:
+        tick:
+          type: integer
+          description: |
+            Absolute demo tick where the clip should start recording.
+            Must lie inside an actual round (between some
+            `round.startTick` and `round.endTick`); freeze-time ticks
+            between rounds are rejected with `400`.
+          example: 12345
+        duration:
+          type: number
+          description: |
+            Clip length in seconds. Must be greater than `0` and at
+            most `60`. `tick + duration*tickRate` must not exceed the
+            demo end.
+          example: 15.0
+          minimum: 0
+          maximum: 60
+        povSteamId:
+          type: string
+          description: |
+            SteamID64 (decimal string) of the player whose POV the
+            camera follows. Must be a participant of the match (listed
+            under `teamA.players[]` / `teamB.players[]` in
+            `/public-api/matches`).
+          example: "76561198044444444"
+
+    RenderCustomClipsRequest:
+      allOf:
+        - $ref: '#/components/schemas/CustomRenderOptions'
+        - type: object
+          required:
+            - customClips
+          description: |
+            Body of `POST /public-api/render-custom/{jobId}`. Visual
+            render options inherited from `CustomRenderOptions` (same
+            flags as `RenderOptions` minus `tickPresetInSeconds`, since
+            each clip's own `duration` is the authoritative window
+            length).
+          properties:
+            customClips:
+              type: array
+              minItems: 1
+              description: |
+                Caller-defined clips. Each entry renders to one MP4
+                starting at `tick` for `duration` seconds from
+                `povSteamId`'s point of view.
+              items:
+                $ref: '#/components/schemas/CustomClipRequest'
+              example:
+                - tick: 12345
+                  duration: 12.0
+                  povSteamId: "76561198044444444"
+                - tick: 18900
+                  duration: 8.5
+                  povSteamId: "76561198055555555"
+
 
     RenderFragMovieRequest:
       type: object
@@ -783,9 +991,11 @@ components:
     RenderJobStatusResponse:
       type: object
       description: |
-        Map of **video jobId** → render status for fragmovie clip videos
-        on an analyze job. The keys are video jobIds from
-        `RenderJobResponse.jobIds`, NOT analyze jobIds or highlight ids.
+        Map of **video jobId** → render status for clip videos on an
+        analyze job (covers clips queued by both
+        `POST /render/{jobId}` and `POST /render-custom/{jobId}`). The
+        keys are video jobIds from `RenderJobResponse.jobIds`, NOT
+        analyze jobIds or highlight ids.
       additionalProperties:
         type: object
         properties:
@@ -854,6 +1064,35 @@ components:
               type: integer
               description: "Number of scenes to render"
               example: 5
+
+    CustomCreditsCalcRequest:
+      allOf:
+        - $ref: '#/components/schemas/CustomRenderOptions'
+        - type: object
+          required:
+            - customClips
+          description: |
+            Body of `POST /public-api/custom-credits-calc`. Same shape
+            as `RenderCustomClipsRequest` (minus the path-bound analyze
+            jobId), so callers can copy-paste the same payload they
+            intend to render and see the exact cost.
+
+            Only `duration` affects pricing — `tick` and `povSteamId`
+            are accepted (and required, for payload symmetry with the
+            actual render endpoint) but ignored.
+          properties:
+            customClips:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/CustomClipRequest'
+              example:
+                - tick: 12345
+                  duration: 12.0
+                  povSteamId: "76561198044444444"
+                - tick: 18900
+                  duration: 8.5
+                  povSteamId: "76561198055555555"
     FragMovieCreditsCalcRequest:
       type: object
       required:
@@ -876,8 +1115,14 @@ components:
         credits:
           type: integer
           example: 10
-    RenderOptions:
+    CustomRenderOptions:
       type: object
+      description: |
+        Visual render options applied to every clip in a single
+        request. Subset of `RenderOptions`; deliberately omits
+        `tickPresetInSeconds` because each `CustomClipRequest` carries
+        its own authoritative `duration` — a global lead-time would
+        have no meaning here.
       properties:
         hideUi:
           type: boolean
@@ -899,9 +1144,20 @@ components:
           type: boolean
           description: Hide the demo-slap watermark
           default: false
-        tickPresetInSeconds:
-          type: integer
-          description: Seconds to record before the kill happens
-          default: 7
-          minimum: 5
-          maximum: 15
+        highResolution:
+          type: boolean
+          description: |
+            Render at 1920×1080 (true) instead of 1280×720 (false).
+            1080p applies a 1.5× credit multiplier.
+          default: true
+    RenderOptions:
+      allOf:
+        - $ref: '#/components/schemas/CustomRenderOptions'
+        - type: object
+          properties:
+            tickPresetInSeconds:
+              type: integer
+              description: Seconds to record before the kill happens
+              default: 7
+              minimum: 5
+              maximum: 15
