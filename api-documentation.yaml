@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 2.3.0
+  version: 2.4.0
   description: |
     Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)
 
@@ -21,6 +21,10 @@ info:
       * `/render-fragmovie/{jobId}/status`, `/render-fragmovie/{jobId}/data` → **fragmovie-export id**
 
     The `POST /render-custom/{jobId}` endpoint selects clips by `(tick, duration, povSteamId)` instead of analyzer-detected highlight ids. Its POV `steamId` is the participant SteamID64 from `GET /public-api/matches` (`teamA.players[].steamId`, `teamB.players[].steamId`). Output (status + signed URLs) is retrieved from the SAME `/render/{jobId}/status` and `/render/{jobId}/data` endpoints as `POST /render/{jobId}` — both selectors share one status/data surface.
+
+    ## 2.4.0 additive change
+
+    `GET /public-api/render/{jobId}/status` (`RenderJobStatusResponse`) entries gained an optional `errorMessage` field, present only when `status` is `error`. It contains a user-friendly description of the render failure (e.g. demo incompatible with the current renderer, demo download failed, renderer temporarily unavailable). Non-breaking: the field is additive and optional, existing clients keep working unchanged.
 
     ## 2.3.0 pricing change
 
@@ -452,6 +456,10 @@ paths:
         video jobIds appear as the keys of the response object.
         Compare the keys with the
         `jobIds` returned by your `POST /render/{jobId}` call.
+
+        Entries with `status: error` additionally carry an
+        `errorMessage` with a user-friendly description of the
+        failure — surface it to the user.
       security:
         - ApiKeyAuth: [ ]
       parameters:
@@ -1130,6 +1138,15 @@ components:
             format: date-time
             description: Estimated finish time for the video render job
             example: "2025-11-20T12:00:00Z"
+          errorMessage:
+            type: string
+            description: |
+              Only present when `status` is `error`. User-friendly
+              description of why the render failed (e.g. demo
+              incompatible with the current renderer, demo download
+              failed, renderer temporarily unavailable). Surface this
+              message to the user.
+            example: "Demo is incompatible with the current renderer — you need a recent demo."
         required:
           - status
       example:
@@ -1139,6 +1156,10 @@ components:
         "65f0a1b2c3d4e5f600000124":
           status: working
           estimatedFinishAt: "2025-11-20T12:00:00Z"
+        "65f0a1b2c3d4e5f600000125":
+          status: error
+          estimatedFinishAt: "2025-11-20T12:00:00Z"
+          errorMessage: "Demo is incompatible with the current renderer — you need a recent demo."
 
     RenderDataResponse:
       type: object
