@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: demo-slap Public API
-  version: 2.4.0
+  version: 2.5.0
   description: |
     Welcome to the demo-slap Public API! For access and support, please join our Discord community: [https://discord.gg/8nfh26W9wQ](https://discord.gg/8nfh26W9wQ)
 
@@ -21,6 +21,10 @@ info:
       * `/render-fragmovie/{jobId}/status`, `/render-fragmovie/{jobId}/data` → **fragmovie-export id**
 
     The `POST /render-custom/{jobId}` endpoint selects clips by `(tick, duration, povSteamId)` instead of analyzer-detected highlight ids. Its POV `steamId` is the participant SteamID64 from `GET /public-api/matches` (`teamA.players[].steamId`, `teamB.players[].steamId`). Output (status + signed URLs) is retrieved from the SAME `/render/{jobId}/status` and `/render/{jobId}/data` endpoints as `POST /render/{jobId}` — both selectors share one status/data surface.
+
+    ## 2.5.0 additive change
+
+    `RenderOptions` (used by `POST /public-api/render/{jobId}`) gained an optional `applyColorGrading` boolean field (default `true`). When set to `false`, the rendered highlight clips are produced without color grading. The field only has an effect for highlight (FragMovie) renders; all other render types never apply color grading regardless. Non-breaking: the field is additive and optional, existing clients keep working unchanged.
 
     ## 2.4.0 additive change
 
@@ -1304,3 +1308,10 @@ components:
               default: 7
               minimum: 5
               maximum: 15
+            applyColorGrading:
+              type: boolean
+              description: |
+                Apply color grading to the rendered highlight clips.
+                Only meaningful for highlight (FragMovie) renders — all other
+                render types never apply color grading regardless of this flag.
+              default: true
